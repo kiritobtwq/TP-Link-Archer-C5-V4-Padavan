@@ -87,21 +87,36 @@ jobs:
           tp_recovery.bin
           tftpd64.464.zip
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Check firmware size
+      run: |
+        partitions=padavan-ng/trunk/configs/boards/$CONFIG_VENDOR/$CONFIG_FIRMWARE_PRODUCT_ID/partitions.config
+        max_fw_size="$(awk '/Firmware/ { getline; getline; sub(",", ""); print strtonum($2); }' "$partitions")"
+        fw_size="$(stat -c %s "$FW_FILE_NAME")"
+        if ((fw_size > max_fw_size)); then
+          fw_size_fmtd="$(numfmt --grouping "$fw_size") bytes"
+          max_fw_size_fmtd="$(numfmt --grouping "$max_fw_size") bytes"
+          echo "Firmware size ($fw_size_fmtd) exceeds max size ($max_fw_size_fmtd) for your target device"
+          exit 1
+        fi
+
+    - name: Create Release and Upload Assets
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: release-${{ env.BUILD_TIMESTAMP }}
-        release_name: Padavan TP-Link Archer C5 V4 Entware/Optware (${{ env.BUILD_TIMESTAMP }})
+        name: Padavan TP-Link Archer C5 V4 Entware/Optware (${{ env.BUILD_TIMESTAMP }})
+        draft: false
+        prerelease: false
+        files: |
+          ./${{ env.FW_FILE_NAME }}
+          ./tp_recovery.bin
+          ./tftpd64.464.zip
         body: |
           ## 💝 Поддержать разработку
 
           Если вам нравится прошивка, вы можете поддержать разработку:
 
-          - [Купить кофе](https://pay.cloudtips.ru/p/afb55f71)
-          - [Поддержать на Boosty](https://boosty.to/danayer)
+          - [Купить кофе](https://cloudtips.ru)
+          - [Поддержать на Boosty](https://boosty.to)
 
           📋 Инструкция прошивки
           
@@ -184,48 +199,6 @@ jobs:
           - /opt/bin/on_wps.sh - обработка нажатия WPS
           - /opt/bin/on_hotplug_printer.sh - подключение принтеров
           - Поддержка SWAP-файла (/opt/.swap)
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./${{ env.FW_FILE_NAME }}
-        asset_name: ${{ env.FW_FILE_NAME }}
-        asset_content_type: application/octet-stream
 
-    - name: Upload Recovery Firmware Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./tp_recovery.bin
-        asset_name: tp_recovery.bin
-        asset_content_type: application/octet-stream
-
-    - name: Upload TFTP Server Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./tftpd64.464.zip
-        asset_name: tftpd64.464.zip
-        asset_content_type: application/zip
-
-    - name: Check firmware size
-      run: |
-        partitions=padavan-ng/trunk/configs/boards/$CONFIG_VENDOR/$CONFIG_FIRMWARE_PRODUCT_ID/partitions.config
-        max_fw_size="$(awk '/Firmware/ { getline; getline; sub(",", ""); print strtonum($2); }' "$partitions")"
-        fw_size="$(stat -c %s "$FW_FILE_NAME")"
-
-        if ((fw_size > max_fw_size)); then
-          fw_size_fmtd="$(numfmt --grouping "$fw_size") bytes"
-          max_fw_size_fmtd="$(numfmt --grouping "$max_fw_size") bytes"
-          echo "Firmware size ($fw_size_fmtd) exceeds max size ($max_fw_size_fmtd) for your target device"
-          exit 1
-        fi
